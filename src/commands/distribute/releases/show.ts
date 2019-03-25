@@ -17,8 +17,8 @@ export default class ShowReleaseDetailsCommand extends AppCommand {
 
   public async run(client: AppCenterClient): Promise<CommandResult> {
     const app = this.app;
-
     const releaseId = Number(this.releaseId);
+    const noDestinations = `The release with id ${releaseId} does not have any release destinations.`;
     if (!Number.isSafeInteger(releaseId) || releaseId <= 0) {
       return failure(ErrorCodes.InvalidParameter, `${this.releaseId} is not a valid release id`);
     }
@@ -50,6 +50,7 @@ export default class ShowReleaseDetailsCommand extends AppCommand {
       ["Display Name", "appDisplayName"],
       ["Version", "version"],
       ["Short Version", "shortVersion"],
+      ["Enabled", "enabled"],
       ["Release Notes", "releaseNotes"],
       ["Size", "size"],
       ["OS Required", "minOs"],
@@ -60,7 +61,7 @@ export default class ShowReleaseDetailsCommand extends AppCommand {
       ["Download URL", "downloadUrl"],
       ["Install URL", "installUrl"],
       ["Icon URL", "appIconUrl"],
-      ["Distribution Group", "distributionGroups", (distributionGroups: models.DistributionGroup[]) => _.get(distributionGroups, "[0].name", "")]
+      ["Destinations", "destinations", (destinations: models.Destination[]) => destinations && destinations.length > 0 ? JSON.stringify(destinations, null, 2) : noDestinations]
     ], releaseDetails);
 
     return success();

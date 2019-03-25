@@ -7,6 +7,7 @@ import * as Request from "request";
 import * as Path from "path";
 import * as Pfs from "../../util/misc/promisfied-fs";
 import { DefaultApp } from "../../util/profile";
+import { getDistributionGroup, addGroupToRelease } from "./lib/distribute-util";
 
 const debug = require("debug")("appcenter-cli:commands:distribute:release");
 
@@ -248,18 +249,19 @@ export default class ReleaseBinaryCommand extends AppCommand {
     return releaseRequestResponse.result;
   }
 
-  private async distributeRelease(client: AppCenterClient, app: DefaultApp, releaseId: number, releaseNotesString: string): Promise<models.ReleaseDetailsResponse> {
-    let updateReleaseRequestResponse: ClientResponse<models.ReleaseDetailsResponse>;
+  private async putReleaseDetails(client: AppCenterClient, app: DefaultApp, releaseId: number, releaseNotesString?: string): Promise<models.ReleaseUpdateResponse> {
     try {
-      updateReleaseRequestResponse = await out.progress(`Distributing the release...`,
-        clientRequest<models.ReleaseDetailsResponse>(async (cb) => client.releases.update(releaseId, {
-          distributionGroupName: this.distributionGroup,
-          releaseNotes: releaseNotesString
-        }, app.ownerName, app.appName, cb)));
-      const statusCode = updateReleaseRequestResponse.response.statusCode;
+      const { result, response } = await out.progress(`Updating release details...`,
+        clientRequest<models.ReleaseUpdateResponse>(async (cb) => client.releases.updateDetails(releaseId, app.ownerName, app.appName, {
+          releaseNotes: releaseNotesString,
+        }, cb))
+      );
+
+      const statusCode = response.statusCode;
       if (statusCode >= 400) {
         throw statusCode;
       }
+      return result;
     } catch (error) {
       if (error === 400) {
         throw failure(ErrorCodes.Exception, "changing distribution group is not supported");
@@ -268,7 +270,15 @@ export default class ReleaseBinaryCommand extends AppCommand {
         throw failure(ErrorCodes.Exception, `failed to set distribution group and release notes for release ${releaseId}`);
       }
     }
+  }
 
-    return updateReleaseRequestResponse.result;
+  private async distributeRelease(client: AppCenterClient, app: DefaultApp, releaseId: number, releaseNotesString: string): Promise<void> {
+    await this.putReleaseDetails(client, app, releaseId, releaseNotesString);
+    const distributionGroupResponse = await getDistributionGroup({
+      client, releaseId, app: this.app, destination: this.distributionGroup, destinationType: "group"
+    });
+    await addGroupToRelease({
+      client, releaseId, distributionGroup: distributionGroupResponse, app: this.app, destination: this.distributionGroup, destinationType: "group", mandatory: false, silent: false
+    });
   }
 }
